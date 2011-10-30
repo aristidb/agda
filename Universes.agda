@@ -153,4 +153,22 @@ example₁ = _
 example₂ : isTrue (not ((true ∷ false ∷ []) == (true ∷ true ∷ [])))
 example₂ = _
 
+data Compare : ℕ -> ℕ -> Set where
+  less : forall {n} k -> Compare n (n + suc k)
+  more : forall {n} k -> Compare (n + suc k) n
+  same : forall {n} -> Compare n n
 
+cmp : (n m : ℕ) -> Compare n m
+cmp zero zero = same
+cmp zero (suc n) = less n
+cmp (suc n) zero = more n
+cmp (suc n) (suc m) with cmp n m
+cmp (suc n) (suc .(n + suc k)) | less k = less k
+cmp (suc .(m + suc k)) (suc m) | more k = more k
+cmp (suc n) (suc .n) | same = same
+
+difference : ℕ -> ℕ -> ℕ
+difference n m with cmp n m
+difference n .n | same = zero
+difference n .(n + suc k) | less k = suc k
+difference .(m + suc k) m | more k = suc k
