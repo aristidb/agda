@@ -186,3 +186,6 @@ lem-filter-complete' (y ∷ ys) p x (tl i) px with p y | lem-filter-complete' ys
 
 lem-filter-complete : {A : Set}{xs : List A}(p : A -> Bool)(x : A) -> x ∈ xs -> satisfies p x -> x ∈ filter p xs
 lem-filter-complete {A} {xs} p x el px = lem-filter-complete' {A} xs p x el px
+
+lem-filter-copumpkin : {A : Set}{xs : List A}(p : A -> Bool)(x : A) -> x ∈ filter p xs -> satisfies p x
+lem-filter-copumpkin {A}{xs} p x el = lemma-All-∈ (lem-filter-sound p xs) el
