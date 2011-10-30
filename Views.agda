@@ -63,7 +63,7 @@ find p (x ∷ xs) | it false prf | not-found npxs = not-found (falseIsFalse prf 
 
 data _∈_ {A : Set}(x : A) : List A -> Set where
   hd : forall {xs} -> x ∈ (x ∷ xs)
-  tl : forall {xs y ys} -> x ∈ xs -> x ∈ (y ∷ ys)
+  tl : forall {xs y} -> x ∈ xs -> x ∈ (y ∷ xs)
 
 index : {A : _}{x : A}{xs : _} -> x ∈ xs -> ℕ
 index hd = zero
@@ -162,3 +162,27 @@ infer Γ (.(erase t₁) $$ .(erase t₂)) | ok (σ₁ ⟶ τ) t₁ | ok σ₂ t�
 infer Γ (lam σ e) with infer (σ ∷ Γ) e
 infer Γ (lam σ .(erase t)) | ok τ t = ok (σ ⟶ τ) (lam σ t)
 infer Γ (lam σ .(eraseBad b)) | bad b = bad (blam σ b)
+
+lemma-All-∈ : forall {A x xs}{P : A -> Set} -> All P xs -> x ∈ xs -> P x
+lemma-All-∈ all[] ()
+lemma-All-∈ (p :all: ps) hd = p
+lemma-All-∈ (p :all: ps) (tl i) = lemma-All-∈ ps i
+
+lem-filter-sound : {A : Set}(p : A -> Bool)(xs : List A) -> All (satisfies p) (filter p xs)
+lem-filter-sound p [] = all[]
+lem-filter-sound p (x ∷ xs) with inspect (p x)
+lem-filter-sound p (x ∷ xs) | it y prf with p x | prf
+lem-filter-sound p (x ∷ xs) | it .true prf | true | refl = trueIsTrue prf :all: lem-filter-sound p xs
+lem-filter-sound p (x ∷ xs) | it .false prf | false | refl = lem-filter-sound p xs
+
+lem-filter-complete' : {A : Set}(xs : List A)(p : A -> Bool)(x : A) -> x ∈ xs -> satisfies p x -> x ∈ filter p xs
+lem-filter-complete' [] p x () px
+lem-filter-complete' (x ∷ xs) p .x hd px with p x
+lem-filter-complete' (x ∷ xs) p .x hd px | true = hd
+lem-filter-complete' (x ∷ xs) p .x hd () | false
+lem-filter-complete' (y ∷ ys) p x (tl i) px with p y | lem-filter-complete' ys p x i px
+... | true | pn = tl pn
+... | false | pn = pn
+
+lem-filter-complete : {A : Set}{xs : List A}(p : A -> Bool)(x : A) -> x ∈ xs -> satisfies p x -> x ∈ filter p xs
+lem-filter-complete {A} {xs} p x el px = lem-filter-complete' {A} xs p x el px
