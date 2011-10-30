@@ -37,7 +37,7 @@ infixl 40 _+_
 infixr 20 _or_
 infix 5 if_then_else_
 
-infixr 40 _::_
+infixr 30 _::_
 data List (A : Set) : Set where
   []   : List A
   _::_ : A -> List A -> List A
@@ -150,6 +150,10 @@ trivial = _
 isTrue : Bool -> Set
 isTrue true = True
 isTrue false = False
+
+isFalse : Bool -> Set
+isFalse true = False
+isFalse false = True
 
 _<_ : Nat -> Nat -> Bool
 _ < zero = false
@@ -280,6 +284,45 @@ module Sort (A : Set)(_<_ : A -> A -> Bool) where
   sort [] = []
   sort (x :: xs) = insert x (sort xs)
 
+  data SameLength : List A -> List A -> Set where
+    nil : SameLength [] []
+    cons : forall {xs ys} -> (x : A)(y : A) -> SameLength xs ys -> SameLength (x :: xs) (y :: ys)
+    eqv : (xs : List A) -> SameLength xs xs
+
+  sl-commut : {xs ys : List A} -> SameLength xs ys -> SameLength ys xs
+  sl-commut nil = nil
+  sl-commut (cons x y p) = cons y x (sl-commut p)
+  sl-commut (eqv xs) = (eqv xs)
+
+  {-
+  sl-assoc : {xs ys zs : List A} -> SameLength xs ys -> SameLength ys zs -> SameLength xs zs
+  sl-assoc nil nil = nil
+  sl-assoc (eqv xs) (eqv xs) = eqv xs
+  -}
+
+  {-
+  lem-insert-pres : (y : A)(xs : List A) -> SameLength (y :: xs) (insert y xs)
+  lem-insert-pres y [] = cons y y nil
+  lem-insert-pres y (x :: xs) with x < y
+  lem-insert-pres y (x :: xs) | false = cons y y (eqv (x :: xs))
+  lem-insert-pres y (x :: xs) | true = cons x x (lem-insert-pres y xs)
+  -}
+
+  data Sorted : List A -> Set where
+    snil : Sorted []
+    sone : (x : A) -> Sorted (x :: [])
+    smult : (x : A) -> (y : A) -> (ys : List A) -> isFalse (y < x) -> Sorted (y :: ys) -> Sorted (x :: y :: ys)
+
+  {-
+  lem-insert : (x : A) -> (ys : List A) -> Sorted ys -> Sorted (insert x ys)
+  lem-insert x [] p = sone x
+  lem-insert x (y :: ys) p with y < x
+  lem-insert x (y :: ys) p | false = smult x y ys _ p
+  lem-insert x (y :: []) p | true = smult y x [] _ (sone x)
+  lem-insert x (y :: ys) p | true = let zs = insert x ys
+                                    in  
+  -}
+
 sort₁ : (A : Set)(_<_ : A -> A -> Bool) -> List A -> List A
 sort₁ = Sort.sort
 
@@ -312,3 +355,99 @@ getX = Point.x
 
 abs² : Point -> Nat
 abs² p = let open Point p in x * x + y * y
+
+record Monad (M : Set -> Set) : Set1 where
+  field
+    return : {A : Set} -> A -> M A
+    _>>=_ : {A B : Set} -> M A -> (A -> M B) -> M B
+
+  mapM : {A B : Set} -> (A -> M B) -> List A -> M (List B)
+  mapM f [] = return []
+  mapM f (x :: xs) = f x >>= \y -> mapM f xs >>= \ys -> return (y :: ys)
+
+mapM' : {M : Set -> Set} -> Monad M -> {A B : Set} -> (A -> M B) -> List A -> M (List B)
+mapM' Mon f xs = Monad.mapM Mon f xs
+
+Matrix : Set -> Nat -> Nat -> Set
+Matrix A n m = Vec (Vec A n) m
+
+vec : {n : Nat}{A : Set} -> A -> Vec A n
+vec {zero} x = []
+vec {suc n} x = x :: vec x
+
+infixl 90 _$_
+_$_ : {n : Nat}{A B : Set} -> Vec (A -> B) n -> Vec A n -> Vec B n
+[] $ [] = []
+(f :: fs) $ (x :: xs) = f x :: (fs $ xs)
+
+transpose : forall {A n m} -> Matrix A n m -> Matrix A m n
+transpose [] = vec []
+transpose ([] :: y') = []
+transpose ((y :: y') :: y0) = (y :: vec head $ y0) :: transpose (y' :: vec tail $ y0)
+
+lem-!-tab : forall {A n} -> (f : Fin n -> A)(i : Fin n) -> (tabulate f ! i) == f i
+lem-!-tab f fzero = refl
+lem-!-tab f (fsuc j) = lem-!-tab (f ∘ fsuc) j
+
+cong : forall {A B}{x y}(f : A -> B) -> x == y -> f x == f y
+cong f refl = refl
+
+{-
+lem-tab-fsuc : forall {A n} (f : Fin (suc n) -> A)-> tabulate (f ∘ fsuc) == tail (tabulate f)
+lem-tab-fsuc f = refl 
+
+lem-tab-! : forall {A n} (xs : Vec A n) -> tabulate (_!_ xs) == xs
+lem-tab-! [] = refl
+lem-tab-! (x :: ys) = {! lem-tab-fsuc (_!_ (x :: ys))!}
+-}
+
+⊆-refl : {A : Set}{xs : List A} -> xs ⊆ xs
+⊆-refl {A} {[]} = stop
+⊆-refl {A} {y :: y'} = keep ⊆-refl
+
+⊆-trans : {A : Set}{xs ys zs : List A} -> xs ⊆ ys -> ys ⊆ zs -> xs ⊆ zs
+⊆-trans stop stop = stop
+⊆-trans stop (drop p) = drop p
+⊆-trans (drop p) (drop q) = drop (⊆-trans (drop p) q) 
+⊆-trans (drop p) (keep q) = drop (⊆-trans p q)
+⊆-trans (keep p) (drop q) = drop (⊆-trans (keep p) q)
+⊆-trans (keep p) (keep q) = keep (⊆-trans p q)
+
+--infixr 30 _::_
+data SubList {A : Set} : List A -> Set where
+  [] : SubList []
+  _::_ : forall x {xs} -> SubList xs -> SubList (x :: xs)
+  skip : forall {x xs} -> SubList xs -> SubList (x :: xs)
+
+forget : {A : Set}{xs : List A} -> SubList xs -> List A
+forget [] = []
+forget (x :: y) = x :: forget y
+forget (skip y) = forget y
+
+lem-forget : {A : Set}{xs : List A}(zs : SubList xs) -> forget zs ⊆ xs
+lem-forget [] = stop
+lem-forget (x :: y) = keep (lem-forget y)
+lem-forget (skip y) = drop (lem-forget y)
+
+filter' : {A : Set} -> (A -> Bool) -> (xs : List A) -> SubList xs
+filter' p [] = []
+filter' p (y :: ys) with p y
+... | true = y :: filter' p ys
+... | false = skip (filter' p ys)
+
+complement : {A : Set}{xs : List A} -> SubList xs -> SubList xs
+complement [] = []
+complement (x :: y) = skip y
+complement {xs = x :: _} (skip y) = x :: y
+
+_++_ : {A : Set} -> List A -> List A -> List A
+[] ++ ys = ys
+x :: xs ++ ys = x :: (xs ++ ys) 
+
+concatMap : {A : Set}{B : Set} -> (f : A -> List B) -> List A -> List B
+concatMap f [] = []
+concatMap f (x :: xs) = f x ++ concatMap f xs
+
+sublists : {A : Set}(xs : List A) -> List (SubList xs)
+sublists [] = [] :: []
+sublists (x :: xs) = concatMap (λ ys → (x :: ys) :: skip ys :: []) (sublists xs)
