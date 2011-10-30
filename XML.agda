@@ -45,16 +45,18 @@ mutual
   printXML : {s : Schema} -> XML s -> String
   printXML (element t xs) = "<" ++ t ++ ">" ++ printChildren xs ++ "</" ++ t ++ ">"
 
-  printFirst : {kid : Child} -> Element kid -> String
-  printFirst {text} x = x
-  printFirst {elem zero m s} [] = ""
-  printFirst {elem zero (suc m) s} (e :: es) = printXML e ++ printFirst es
-  printFirst {elem (suc n) zero s} ()
-  printFirst {elem (suc n) (suc m) s} (e :: es) = printXML e ++ printFirst es
+  printFirst : (kid : Child) -> Element kid -> String
+  printFirst text x = x
+  printFirst (elem zero m s) [] = ""
+  printFirst (elem zero (suc m) s) (e :: es)
+    = printXML e ++ printFirst (elem zero m s) es
+  printFirst (elem (suc n) zero s) ()
+  printFirst (elem (suc n) (suc m) s) (e :: es)
+    = printXML e ++ printFirst (elem n m s) es
 
   printChildren : {kids : List Child} -> All Element kids -> String
   printChildren all[] = ""
-  printChildren (x :all: xs) = printFirst x ++ printChildren xs
+  printChildren {k ∷ ks} (x :all: xs) = printFirst k x ++ printChildren xs
 
 schema : Schema
 schema = tag "Root" (text ∷ [])
