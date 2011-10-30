@@ -38,7 +38,6 @@ find₁ p [] = not-found all[]
 find₁ p (x ∷ xs) with p x
 ... | true = found [] x {! !} xs
 ... | false = {! !}
-
 data _==_ {A : Set}(x : A) : A -> Set where
   refl : x == x
 
@@ -86,17 +85,24 @@ data Type : Set where
   ı : Type
   _⟶_ : Type -> Type -> Type
 
+data _≠_ : Type -> Type -> Set where
+  ı≠⟶ : forall {σ τ} -> ı ≠ (σ ⟶ τ)
+  ⟶≠ı : forall {σ τ} -> (σ ⟶ τ) ≠ ı
+  ⟶τ≠⟶τ : forall {σ₁ σ₂ τ₁ τ₂} -> σ₁ ≠ σ₂ -> (σ₁ ⟶ τ₁) ≠ (σ₂ ⟶ τ₂)
+  σ⟶≠σ⟶ : forall {σ₁ σ₂ τ₁ τ₂} -> τ₁ ≠ τ₂ -> (σ₁ ⟶ τ₁) ≠ (σ₂ ⟶ τ₂)
+
 data Equal? : Type -> Type -> Set where
   yes : forall {τ} -> Equal? τ τ
-  no : forall {σ τ} -> Equal? σ τ
+  no : forall {σ τ} -> σ ≠ τ -> Equal? σ τ
 
 _=?=_ : (σ τ : Type) -> Equal? σ τ
 ı =?= ı = yes
-ı =?= (_ ⟶ _) = no
-(_ ⟶ _) =?= ı = no
-(σ₁ ⟶ τ₁) =?= (σ₂ ⟶ τ₂) with σ₁ =?= σ₂ | τ₁ =?= τ₂
-(σ ⟶ τ) =?= (.σ ⟶ .τ) | yes | yes = yes
-(σ₁ ⟶ τ₁) =?= (σ₂ ⟶ τ₂) | _ | _ = no
+ı =?= σ ⟶ τ = no ı≠⟶
+σ ⟶ τ =?= ı = no ⟶≠ı
+σ₁ ⟶ τ₁ =?= σ₂ ⟶ τ₂ with σ₁ =?= σ₂ | τ₁ =?= τ₂
+σ ⟶ τ =?= .σ ⟶ .τ | yes | yes = yes
+σ ⟶ τ₁ =?= .σ ⟶ τ₂ | yes | no p = no (σ⟶≠σ⟶ p)
+σ₁ ⟶ τ₁ =?= σ₂ ⟶ τ₂ | no p | _ = no (⟶τ≠⟶τ p)
 
 infixl 80 _$$_
 data Raw : Set where
@@ -116,24 +122,43 @@ erase (var x) = var (index x)
 erase (t $$ u) = erase t $$ erase u
 erase (lam σ τ) = lam σ (erase τ)
 
+data BadTerm (Γ : Cxt) : Set where
+  uv : (n : ℕ) -> BadTerm Γ
+  b$$ : forall {σ} -> BadTerm Γ -> Term Γ σ -> BadTerm Γ
+  f$$b : forall {σ τ} -> Term Γ (σ ⟶ τ) -> BadTerm Γ -> BadTerm Γ
+  ı$$b : Term Γ ı -> BadTerm Γ -> BadTerm Γ
+  b$$b : BadTerm Γ -> BadTerm Γ -> BadTerm Γ
+  ı$$ : forall {σ} -> Term Γ ı -> Term Γ σ -> BadTerm Γ
+  fσ₁$$σ₂ : ∀ {σ₁ σ₂ τ} -> σ₁ ≠ σ₂ -> Term Γ (σ₁ ⟶ τ) -> Term Γ σ₂ -> BadTerm Γ
+  blam : (σ : Type) -> BadTerm (σ ∷ Γ) -> BadTerm Γ
+
+eraseBad : {Γ : Cxt} -> BadTerm Γ -> Raw
+eraseBad {Γ} (uv n) = var (length Γ + n)
+eraseBad (b$$ e₁ e₂) = eraseBad e₁ $$ erase e₂
+eraseBad (f$$b e₁ e₂) = erase e₁ $$ eraseBad e₂
+eraseBad (ı$$b e₁ e₂) = erase e₁ $$ eraseBad e₂
+eraseBad (b$$b e₁ e₂) = eraseBad e₁ $$ eraseBad e₂
+eraseBad (ı$$ e₁ e₂) = erase e₁ $$ erase e₂
+eraseBad (fσ₁$$σ₂ _ e₁ e₂) = erase e₁ $$ erase e₂
+eraseBad (blam σ e) = lam σ (eraseBad e)
+
 data Infer (Γ : Cxt) : Raw -> Set where
   ok : (τ : Type)(t : Term Γ τ) -> Infer Γ (erase t)
-  bad : {e : Raw} -> Infer Γ e
+  bad : (b : BadTerm Γ) -> Infer Γ (eraseBad b)
 
 infer : (Γ : Cxt)(e : Raw) -> Infer Γ e
 infer Γ (var n) with Γ ! n
-infer Γ (var .(length Γ + n)) | outside n = bad
+infer Γ (var .(length Γ + n)) | outside n = bad (uv n)
 infer Γ (var .(index x)) | inside σ x = ok σ (var x)
-infer Γ (e₁ $$ e₂) with infer Γ e₁
-infer Γ (e₁ $$ e₂) | bad = bad
-infer Γ (.(erase t₁) $$ e₂) | ok ı t₁ = bad
-infer Γ (.(erase t₁) $$ e₂) | ok (σ ⟶ τ) t₁ with infer Γ e₂
-infer Γ (.(erase t₁) $$ e₂) | ok (σ ⟶ τ) t₁ | bad = bad
-infer Γ (.(erase t₁) $$ .(erase t₂)) | ok (σ ⟶ τ) t₁ | ok σ' t₂ with σ =?= σ'
-infer Γ (.(erase t₁) $$ .(erase t₂))
-  | ok (σ ⟶ τ) t₁ | ok .σ t₂ | yes = ok τ (t₁ $$ t₂)
-infer Γ (.(erase t₁) $$ .(erase t₂))
-  | ok (σ ⟶ τ) t₁ | ok σ' t₂ | no = bad
+infer Γ (e₁ $$ e₂) with infer Γ e₁ | infer Γ e₂
+infer Γ (.(eraseBad b₁) $$ .(erase t₂)) | bad b₁ | ok τ t₂ = bad (b$$ b₁ t₂)
+infer Γ (.(erase t₁) $$ .(eraseBad b₂)) | ok (σ ⟶ τ) t₁ | bad b₂ = bad (f$$b t₁ b₂)
+infer Γ (.(erase t₁) $$ .(eraseBad b₂)) | ok ı t₁ | bad b₂ = bad (ı$$b t₁ b₂)
+infer Γ (.(eraseBad b₁) $$ .(eraseBad b₂)) | bad b₁ | bad b₂ = bad (b$$b b₁ b₂)
+infer Γ (.(erase t₁) $$ .(erase t₂)) | ok ı t₁ | ok σ t₂ = bad (ı$$ t₁ t₂)
+infer Γ (.(erase t₁) $$ .(erase t₂)) | ok (σ₁ ⟶ τ) t₁ | ok σ₂ t₂ with σ₁ =?= σ₂
+infer Γ (.(erase t₁) $$ .(erase t₂)) | ok (σ ⟶ τ) t₁ | ok .σ t₂ | yes = ok τ (t₁ $$ t₂)
+infer Γ (.(erase t₁) $$ .(erase t₂)) | ok (σ₁ ⟶ τ) t₁ | ok σ₂ t₂ | no p = bad (fσ₁$$σ₂ p t₁ t₂)
 infer Γ (lam σ e) with infer (σ ∷ Γ) e
 infer Γ (lam σ .(erase t)) | ok τ t = ok (σ ⟶ τ) (lam σ t)
-infer Γ (lam σ e) | bad = bad
+infer Γ (lam σ .(eraseBad b)) | bad b = bad (blam σ b)
