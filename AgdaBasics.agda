@@ -392,14 +392,37 @@ lem-!-tab f (fsuc j) = lem-!-tab (f ∘ fsuc) j
 cong : forall {A B}{x y}(f : A -> B) -> x == y -> f x == f y
 cong f refl = refl
 
-{-
-lem-tab-fsuc : forall {A n} (f : Fin (suc n) -> A)-> tabulate (f ∘ fsuc) == tail (tabulate f)
-lem-tab-fsuc f = refl 
+comm : {A : Set}{x y : A} -> x == y -> y == x
+comm refl = refl
 
+comm-plus : (x y : Nat) -> x + y == y + x
+comm-plus zero zero = refl
+comm-plus zero (suc m) with m + zero | comm-plus zero m
+... | .m | refl = refl
+comm-plus (suc n) zero with n + zero | comm-plus zero n
+... | .n | refl = refl
+comm-plus (suc n) (suc m) with n + m | n + suc m | m + suc n | comm-plus n m | comm-plus n (suc m) | comm-plus (suc n) m
+... | .(m + n) | .(suc (m + n)) | .(suc (m + n)) | refl | refl | refl = cong suc refl
+
+with-plus : {A : Set}{n : Nat} -> (k : Nat) -> (f : Fin (k + n) -> A) -> (Fin n -> A)
+with-plus zero f = f
+with-plus (suc k) f = with-plus k (f ∘ fsuc)
+
+vdrop : {A : Set}{n : Nat} -> (k : Nat) -> Vec A (k + n) -> Vec A n
+vdrop zero v = v
+vdrop (suc k) v = vdrop k (tail v)
+
+lem-vdrop-empty : {A : Set}(n : Nat) -> (xs : Vec A (n + zero)) -> vdrop n xs == []
+lem-vdrop-empty zero [] = refl
+lem-vdrop-empty (suc n) (x :: xs) = lem-vdrop-empty n xs
+
+-- courtesy of dschoepe
 lem-tab-! : forall {A n} (xs : Vec A n) -> tabulate (_!_ xs) == xs
 lem-tab-! [] = refl
-lem-tab-! (x :: ys) = {! lem-tab-fsuc (_!_ (x :: ys))!}
--}
+lem-tab-! (x :: xs) = cong (_::_ x) (aux x xs)
+  where aux : {A : Set}{n : Nat}(x : A)(xs : Vec A n) -> tabulate (_!_ (x :: xs) ∘ fsuc) == xs
+        aux x [] = refl
+        aux x (x' :: xs) = cong (_::_ x') (aux x' xs)
 
 ⊆-refl : {A : Set}{xs : List A} -> xs ⊆ xs
 ⊆-refl {A} {[]} = stop
