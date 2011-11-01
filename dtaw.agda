@@ -141,3 +141,10 @@ case f g (inr y) = g y
 div : Nat -> Nat -> Nat
 div m n = if (m < n) then zero else succ (div (m - n) n)
 -}
+
+div : Nat -> Nat -> Nat
+div m zero = zero
+div m (succ n) = helper (m - n)
+  where helper : Nat -> Nat
+        helper zero = zero
+        helper (succ d) = succ (div d n)
