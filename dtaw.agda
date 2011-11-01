@@ -147,4 +147,4 @@ div m zero = zero
 div m (succ n) = helper (m - n)
   where helper : Nat -> Nat
         helper zero = zero
-        helper (succ d) = succ (div d n)
+        helper (succ d) = succ (div d (succ n))
